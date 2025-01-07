@@ -19,7 +19,7 @@ class Explainer:
             flag = True
 
         x = self.x_test[id:id+1]
-        pred = self.model.predict(x)
+        pred = self.model._apply_threshold(self.model.model.predict(x, verbose=0)).astype(np.int32)
         if integrated_grads:
             grads = self._get_integrated_grads(x, pred)
         else:
@@ -124,7 +124,7 @@ class Explainer:
         
         with tf.GradientTape() as tape:
             tape.watch(interpolated_inputs)
-            preds = self.model.model(interpolated_inputs)
+            preds = tf.cast(self.model.model.predict(interpolated_inputs, verbose=0), dtype=tf.float32)
             target_scores = preds[:, target_class_idx]
         
         grads = tape.gradient(target_scores, interpolated_inputs)
@@ -137,7 +137,6 @@ class Explainer:
         return integrated_grads
 
     
-
     def _visualize_separate(self, x):
         global_min = np.min(x)
         global_max = np.max(x)

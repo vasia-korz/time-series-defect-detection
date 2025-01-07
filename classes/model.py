@@ -1,7 +1,7 @@
 import matplotlib.pyplot as plt
 from tensorflow.keras.models import Sequential
 import tensorflow as tf
-from tensorflow.keras.layers import LSTM, Dense, Masking
+from tensorflow.keras.layers import LSTM, GRU, Bidirectional, Dense, Masking
 from tensorflow.keras.callbacks import EarlyStopping
 
 class Model:
@@ -13,7 +13,11 @@ class Model:
             seq_len=59, 
             load=False, 
             path=None, 
-            padding='post', 
+            padding='post',
+            layer_type='lstm',  # lstm, gru, bi_lstm
+            layer_size=128,
+            epochs=50,
+            batch_size=64,
             x_train=None,
             y_train=None,
             x_val=None,
@@ -27,6 +31,10 @@ class Model:
         self.load = load
         self.path = path
         self.padding = padding
+        self.layer_type = layer_type
+        self.layer_size = layer_size
+        self.epochs = epochs
+        self.batch_size = batch_size
         self.model = None
         self.debug = debug
         self.x_train = x_train
@@ -53,7 +61,6 @@ class Model:
         acc = (self.y_pred == y).all(axis=1).sum() / len(y)
 
         return acc
-        
 
 
     def get_model(self):
@@ -100,8 +107,8 @@ class Model:
         
         history = model.fit(
             self.x_train, self.y_train,
-            batch_size=64,
-            epochs=70,
+            batch_size=self.batch_size,
+            epochs=self.epochs,
             validation_data=(self.x_val, self.y_val),
             callbacks=callbacks
         )
@@ -114,9 +121,14 @@ class Model:
         model.add(Masking(mask_value=self.padding_value, input_shape=(self.seq_len, self.n_features)))
 
         if self.padding == 'post':  # pre padding is not supported by cudnn
-            model.add(LSTM(128, return_sequences=False))
+            if self.layer_type == 'lstm':
+                model.add(LSTM(self.layer_size, return_sequences=False))
+            elif self.layer_type == 'gru':
+                model.add(GRU(self.layer_size, return_sequences=False))
+            else:
+                model.add(Bidirectional(LSTM(self.layer_size, return_sequences=False)))
         else:
-            model.add(LSTM(128, return_sequences=False, use_cudnn=False))
+            model.add(LSTM(self.layer_size, return_sequences=False, use_cudnn=False))
 
         model.add(Dense(self.n_classes, activation='sigmoid'))
 
@@ -128,19 +140,17 @@ class Model:
         return model
     
 
-    def _apply_threshold(self, thresh):
-        arr = self.y_pred_unthreshed.copy()
+    def _apply_threshold(self, x, thresh=0.5):
+        arr = x.copy()
 
         arr[arr > thresh] = 1
         arr[arr <= thresh] = 0
-
-        self.y_pred = arr
         
         return arr
 
     
     def predict(self, x, thresh=0.5):
         self.y_pred_unthreshed = self.model.predict(x)
-        self._apply_threshold(thresh)
+        self.y_pred = self._apply_threshold(self.y_pred_unthreshed, thresh)
 
         return self.y_pred
