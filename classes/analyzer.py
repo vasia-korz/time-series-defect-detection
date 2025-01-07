@@ -41,13 +41,17 @@ class Analyzer:
 
         for i, explanation in enumerate(self.explanations):
             for j in range(len(explanation["feature"])):
+                iou_curr = []
                 for mask in (self.masks[i][j] if self.masks[i][j] is not None else [None]):
                     if explanation["feature"][j] == -1 and mask is None:
                         continue
 
-                    iou = self._iou_single(explanation["feature"][j], explanation["left"][j], explanation["right"][j], mask)
+                    iou_curr.append(self._iou_single(explanation["feature"][j], explanation["left"][j], explanation["right"][j], mask))
+                
+                if len(iou_curr):
+                    iou = sum(iou_curr) / len(iou_curr)
                     ious.append(iou)
-        
+
         return sum(ious) / len(ious)
     
     
