@@ -52,7 +52,7 @@ class Analyzer:
                     iou = sum(iou_curr) / len(iou_curr)
                     ious.append(iou)
 
-        return sum(ious) / len(ious)
+        return sum(ious) / len(ious) if len(ious) > 0 else 0
     
 
     def class_based_iou(self):
