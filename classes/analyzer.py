@@ -42,6 +42,7 @@ class Analyzer:
         for i, explanation in enumerate(self.explanations):
             for j in range(len(explanation["feature"])):
                 iou_curr = []
+
                 for mask in (self.masks[i][j] if self.masks[i][j] is not None else [None]):
                     if explanation["feature"][j] == -1 and mask is None:
                         continue
@@ -138,7 +139,7 @@ class Analyzer:
         if debug:
             print(f"Correct: {correct}, overall: {overall}")
 
-        return correct / overall
+        return correct / overall if overall > 0 else 0
     
 
     def class_based_accuracy(self, debug=False):
@@ -168,5 +169,5 @@ class Analyzer:
         if debug:
             print(f"Correct: {correct}, overall: {overall}")
 
-        return [c / o for c, o in zip(correct, overall)]
+        return [(c / o if o > 0 else 0) for c, o in zip(correct, overall)]
     
