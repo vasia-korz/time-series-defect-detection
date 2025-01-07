@@ -170,7 +170,7 @@ class Explainer:
         return np.array(x[:, -m:]).reshape(m, 3), np.abs(grads.reshape(grads.shape[0], grads.shape[2], grads.shape[3])[:, -m:, :]), m
     
 
-    def _find_region_with_spike(self, grads_n, known_feature=None, threshold_scale=1.0, max_dip=0.5, expand_margin=0):
+    def _find_region_with_spike(self, grads_n, known_feature=None, threshold_scale=1.0, max_dip=0, expand_margin=0):
         if known_feature is None:
             idx = grads_n.flatten().argmax()
             feature = idx % self.model.n_features
