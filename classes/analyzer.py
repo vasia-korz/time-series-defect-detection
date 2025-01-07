@@ -1,6 +1,9 @@
+import numpy as np
+
 class Analyzer:
-    def __init__(self, explanations, y_true, masks):
-        self.explanations = explanations
+    def __init__(self, explainer, x_test, y_true, masks):
+        self.explainer = explainer
+        self.x_test = x_test
         self.y_true = y_true
         self.masks = masks
 
@@ -8,7 +11,7 @@ class Analyzer:
     def iou_overall(self):
         union, intersection = 0, 0
 
-        for i, explanation in enumerate(self.explanations):
+        for i, explanation in enumerate(self.explainer.explanations):
             for j in range(len(explanation["feature"])):
                 for mask in (self.masks[i][j] if self.masks[i][j] is not None else [None]):
                     if explanation["pred"][0][j] == 1:  # model predicts the defect of class j
@@ -39,7 +42,7 @@ class Analyzer:
     def iou(self):
         ious = []
 
-        for i, explanation in enumerate(self.explanations):
+        for i, explanation in enumerate(self.explainer.explanations):
             for j in range(len(explanation["feature"])):
                 iou_curr = []
 
@@ -57,9 +60,9 @@ class Analyzer:
     
 
     def class_based_iou(self):
-        ious = [[] for _ in range(len(self.explanations[0]["feature"]))]
+        ious = [[] for _ in range(len(self.explainer.explanations[0]["feature"]))]
 
-        for i, explanation in enumerate(self.explanations):
+        for i, explanation in enumerate(self.explainer.explanations):
             for j in range(len(explanation["feature"])):
                 iou_curr = []
 
@@ -116,7 +119,7 @@ class Analyzer:
         correct = 0
         overall = 0
         
-        for i, explanation in enumerate(self.explanations):
+        for i, explanation in enumerate(self.explainer.explanations):
             for j in range(len(explanation["feature"])):
                 for mask in (self.masks[i][j] if self.masks[i][j] is not None else [None]):
                     if explanation["pred"][0][j] == 1:  # model predicts the defect of class j
@@ -143,10 +146,10 @@ class Analyzer:
     
 
     def class_based_accuracy(self, debug=False):
-        correct = [0 for _ in range(len(self.explanations[0]["feature"]))]
-        overall = [0 for _ in range(len(self.explanations[0]["feature"]))]
+        correct = [0 for _ in range(len(self.explainer.explanations[0]["feature"]))]
+        overall = [0 for _ in range(len(self.explainer.explanations[0]["feature"]))]
         
-        for i, explanation in enumerate(self.explanations):
+        for i, explanation in enumerate(self.explainer.explanations):
             for j in range(len(explanation["feature"])):
                 for mask in (self.masks[i][j] if self.masks[i][j] is not None else [None]):
                     if explanation["pred"][0][j] == 1:  # model predicts the defect of class j
@@ -170,4 +173,51 @@ class Analyzer:
             print(f"Correct: {correct}, overall: {overall}")
 
         return [(c / o if o > 0 else 0) for c, o in zip(correct, overall)]
+    
+
+    def analyze(self, scale=3):
+        n_classes = self.explainer.model.n_classes
+
+        solutions = {
+            "pos": {i: [] for i in range(n_classes)},  # correct predictions
+            "neg": {i: [] for i in range(n_classes)}   # incorrect predictions
+        }
+
+        for id, explanation in enumerate(self.explainer.explanations):
+            for i in range(n_classes):
+                masks = self.masks[id][i]
+
+                pred = explanation["pred"][0][i]
+                feature, left, right = explanation["feature"][i], explanation["left"][i], explanation["right"][i]
+
+                if pred == 1:
+                    for mask in masks if masks is not None else [None]:
+                        if mask is not None and mask[0] == feature:
+                            mask_left, mask_right = mask[1]
+
+                            if self._is_intersecting(left, right, mask_left, mask_right):
+                                solutions["pos"][i].append((id, feature, left, right))
+                            else:
+                                solutions["neg"][i].append((id, feature, left, right))
+
+        for i in range(n_classes):
+            pos_examples = solutions["pos"][i][:scale]
+            if pos_examples:
+                x_list, feature_indices, left_list, right_list = zip(*[
+                    (self.x_test[id][:, feature], feature, left, right) for id, feature, left, right in pos_examples
+                ])
+                print(f"Class {i + 1}: Correct Predictions")
+                x_list = np.array(x_list)
+                x_list = [sub[sub != self.explainer.model.padding_value] for sub in x_list]
+                self.explainer._plot_features_with_highlights(x_list, feature_indices, left_list, right_list)
+
+            neg_examples = solutions["neg"][i][:scale]
+            if neg_examples:
+                print(f"Class {i + 1}: Incorrect Predictions")
+                x_list, feature_indices, left_list, right_list = zip(*[
+                    (self.x_test[id][:, feature], feature, left, right) for id, feature, left, right in neg_examples if feature != -1
+                ])
+                x_list = np.array(x_list)
+                x_list = [sub[sub != self.explainer.model.padding_value] for sub in x_list]
+                self.explainer._plot_features_with_highlights(x_list, feature_indices, left_list, right_list)
     
