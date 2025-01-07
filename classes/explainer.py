@@ -26,7 +26,8 @@ class Explainer:
             grads = self._get_grads(x, pred)
 
         if debug:
-            print("Predicted classes:", pred)
+            print("Predicted classes:", pred[0])
+            print("Expected classes:", self.y_test[id].astype(np.int32), "\n")
 
         if (pred > 0).sum() == 0 and flag:
             print("There are no defects. Running one more test.")
@@ -45,8 +46,8 @@ class Explainer:
                 if debug:
                     print(f"Deffect class {i}")
                     self._visualize_separate(x)
-                    self._visualize_separate(grads[i])
-                    self._plot_feature_with_highlight(x[:, feature], feature, left, right)
+                    self._visualize_separate(grads[i], title="Gradient / Importance of Feature")
+                    self._plot_features_with_highlights([x[:, feature]], [feature], [left], [right])
             else:
                 features.append(-1)
                 poses.append(-1)
@@ -137,7 +138,7 @@ class Explainer:
         return integrated_grads
 
     
-    def _visualize_separate(self, x):
+    def _visualize_separate(self, x, title='Feature'):
         global_min = np.min(x)
         global_max = np.max(x)
 
@@ -145,22 +146,31 @@ class Explainer:
         _, axs = plt.subplots(1, 3, figsize=(15, 4))
         
         axs[0].plot(x[..., 0])
-        axs[0].set_title("Feature 1")
+        axs[0].set_title(f"{title} 1")
         axs[0].set_ylim(global_min, global_max)
         
         axs[1].plot(x[..., 1])
-        axs[1].set_title("Feature 2")
+        axs[1].set_title(f"{title} 2")
         axs[1].set_ylim(global_min, global_max)
         
         axs[2].plot(x[..., 2])
-        axs[2].set_title("Feature 3")
+        axs[2].set_title(f"{title} 3")
         axs[2].set_ylim(global_min, global_max)
         
         plt.tight_layout()
         plt.show()
 
 
-    def _remove_padding(self, x, grads, border_cut=3):
+    def _remove_padding_x(self, x):
+        m = np.array((x != [self.model.padding_value for _ in range(3)])).all(axis=2).sum()
+       
+        if self.model.padding == 'post':
+            return np.array(x[:, :m]).reshape(m, 3)
+        
+        return np.array(x[:, -m:]).reshape(m, 3)
+
+
+    def _remove_padding(self, x, grads, border_cut=0):
         m = np.array((x != [self.model.padding_value for _ in range(3)])).all(axis=2).sum()
         m -= border_cut
 
@@ -208,22 +218,41 @@ class Explainer:
         return feature, pos, left, right
 
 
-    def _plot_feature_with_highlight(self, x, feature_index, left, right):
-        plt.figure(figsize=(10, 4))
+    def _plot_features_with_highlights(self, x_list, feature_indices, left_list, right_list):
+        n = len(x_list)
+        if not (len(feature_indices) == len(left_list) == len(right_list) == n):
+            raise ValueError("All input lists must have the same length.")
 
-        plt.plot(x, label=f"Feature {feature_index + 1}", color='blue')
+        fig, axs = plt.subplots(1, n, figsize=(5 * n, 4), constrained_layout=True)
 
-        plt.plot(
-            range(left, right + 1),
-            x[left:right + 1],
-            label="Defect Region",
-            color='red',
-            linewidth=2
-        )
+        if n == 1:
+            axs = [axs]
 
-        plt.title(f"Feature {feature_index + 1} with Highlighted Region")
-        plt.xlabel("Timestep")
-        plt.ylabel("Value")
-        plt.legend()
-        plt.grid()
+        for i, (x, feature_index, left, right) in enumerate(zip(x_list, feature_indices, left_list, right_list)):
+            axs[i].plot(x, label=f"Feature {feature_index + 1}", color='blue')
+
+            if left == right:
+                axs[i].scatter(
+                    left,
+                    x[left],
+                    color='red',
+                    label="Defect Region",
+                    zorder=5
+                )
+            else:
+                axs[i].plot(
+                    range(left, right + 1),
+                    x[left:right + 1],
+                    label="Defect Region",
+                    color='red',
+                    linewidth=2
+                )
+
+            axs[i].set_title(f"Feature {feature_index + 1} with Highlighted Region")
+            axs[i].set_xlabel("Timestep")
+            axs[i].set_ylabel("Value")
+            axs[i].legend()
+            axs[i].grid()
+
         plt.show()
+
