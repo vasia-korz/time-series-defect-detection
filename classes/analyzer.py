@@ -54,6 +54,26 @@ class Analyzer:
 
         return sum(ious) / len(ious)
     
+
+    def class_based_iou(self):
+        ious = [[] for _ in range(len(self.explanations[0]["feature"]))]
+
+        for i, explanation in enumerate(self.explanations):
+            for j in range(len(explanation["feature"])):
+                iou_curr = []
+
+                for mask in (self.masks[i][j] if self.masks[i][j] is not None else [None]):
+                    if explanation["feature"][j] == -1 and mask is None:
+                        continue
+
+                    iou_curr.append(self._iou_single(explanation["feature"][j], explanation["left"][j], explanation["right"][j], mask))
+                
+                if len(iou_curr):
+                    iou = sum(iou_curr) / len(iou_curr)
+                    ious[j].append(iou)
+
+        return [(sum(iou) / len(iou) if len(iou) > 0 else 0) for iou in ious]
+    
     
     def _iou_single(self, feature, left, right, mask):
         if mask is None:
@@ -99,9 +119,9 @@ class Analyzer:
             for j in range(len(explanation["feature"])):
                 for mask in (self.masks[i][j] if self.masks[i][j] is not None else [None]):
                     if explanation["pred"][0][j] == 1:  # model predicts the defect of class j
-                        left, right = explanation["left"][j], explanation["right"][j]
+                        feature, left, right = explanation["feature"][j], explanation["left"][j], explanation["right"][j]
                         
-                        if mask is None:  # in reality there is no defect of class j
+                        if mask is None or mask[0] != feature:  # in reality there is no defect of class j or different feature predicted
                             overall += 1
                         else:
                             mask_left, mask_right = mask[1]
@@ -129,9 +149,9 @@ class Analyzer:
             for j in range(len(explanation["feature"])):
                 for mask in (self.masks[i][j] if self.masks[i][j] is not None else [None]):
                     if explanation["pred"][0][j] == 1:  # model predicts the defect of class j
-                        left, right = explanation["left"][j], explanation["right"][j]
+                        feature, left, right = explanation["feature"][j], explanation["left"][j], explanation["right"][j]
                         
-                        if mask is None:  # in reality there is no defect of class j
+                        if mask is None or mask[0] != feature:  # in reality there is no defect of class j or different feature predicted
                             overall[j] += 1
                         else:
                             mask_left, mask_right = mask[1]
