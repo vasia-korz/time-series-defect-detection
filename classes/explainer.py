@@ -4,10 +4,11 @@ import tensorflow as tf
 from tqdm import tqdm
 
 class Explainer:
-    def __init__(self, model, x_test, y_test):
+    def __init__(self, model, x_test, y_test, masks):
         self.model = model
         self.x_test = tf.convert_to_tensor(x_test, dtype=tf.float32)
         self.y_test = y_test
+        self.masks = masks
         self.explanations = []
 
     
@@ -47,7 +48,7 @@ class Explainer:
                     print(f"Deffect class {i}")
                     self._visualize_separate(x)
                     self._visualize_separate(grads[i], title="Gradient / Importance of Feature")
-                    self._plot_features_with_highlights([x[:, feature]], [feature], [left], [right])
+                    self._plot_features_with_highlights([x[:, feature]], [feature], [left], [right], [None], [None])
             else:
                 features.append(-1)
                 poses.append(-1)
@@ -218,9 +219,18 @@ class Explainer:
         return feature, pos, left, right
 
 
-    def _plot_features_with_highlights(self, x_list, feature_indices, left_list, right_list):
+    def _plot_features_with_highlights(
+        self, x_list, feature_indices, left_list, right_list, mask_left_list, mask_right_list
+    ):
         n = len(x_list)
-        if not (len(feature_indices) == len(left_list) == len(right_list) == n):
+        if not (
+            len(feature_indices)
+            == len(left_list)
+            == len(right_list)
+            == len(mask_left_list)
+            == len(mask_right_list)
+            == n
+        ):
             raise ValueError("All input lists must have the same length.")
 
         fig, axs = plt.subplots(1, n, figsize=(5 * n, 4), constrained_layout=True)
@@ -228,31 +238,45 @@ class Explainer:
         if n == 1:
             axs = [axs]
 
-        for i, (x, feature_index, left, right) in enumerate(zip(x_list, feature_indices, left_list, right_list)):
-            axs[i].plot(x, label=f"Feature {feature_index + 1}", color='blue')
+        for i, (x, feature_index, left, right, mask_left, mask_right) in enumerate(
+            zip(x_list, feature_indices, left_list, right_list, mask_left_list, mask_right_list)
+        ):
+            axs[i].plot(x, label=f"Feature {feature_index + 1}", color="blue")
 
             if left == right:
                 axs[i].scatter(
                     left,
                     x[left],
-                    color='red',
-                    label="Defect Region",
-                    zorder=5
+                    color="red",
+                    label="Detected Defect",
+                    zorder=5,
                 )
             else:
                 axs[i].plot(
                     range(left, right + 1),
                     x[left:right + 1],
-                    label="Defect Region",
-                    color='red',
-                    linewidth=2
+                    label="Detected Defect",
+                    color="red",
+                    linewidth=2,
                 )
 
-            axs[i].set_title(f"Feature {feature_index + 1} with Highlighted Region")
+            if mask_left is not None and mask_right is not None:
+                if mask_left == mask_right:
+                    mask_left = max(0, mask_left - 1)
+                    mask_right = min(len(x) - 1, mask_right + 1)
+                    
+                axs[i].axvspan(
+                    mask_left,
+                    mask_right,
+                    color="green",
+                    alpha=0.3,
+                    label="True Defect Region",
+                )
+
+            axs[i].set_title(f"Feature {feature_index + 1} with Highlighted Regions")
             axs[i].set_xlabel("Timestep")
             axs[i].set_ylabel("Value")
             axs[i].legend()
             axs[i].grid()
 
         plt.show()
-

@@ -196,28 +196,28 @@ class Analyzer:
                             mask_left, mask_right = mask[1]
 
                             if self._is_intersecting(left, right, mask_left, mask_right):
-                                solutions["pos"][i].append((id, feature, left, right))
+                                solutions["pos"][i].append((id, feature, left, right, mask_left, mask_right))
                             else:
-                                solutions["neg"][i].append((id, feature, left, right))
+                                solutions["neg"][i].append((id, feature, left, right, mask_left, mask_right))
 
         for i in range(n_classes):
             pos_examples = solutions["pos"][i][:scale]
             if pos_examples:
-                x_list, feature_indices, left_list, right_list = zip(*[
-                    (self.x_test[id][:, feature], feature, left, right) for id, feature, left, right in pos_examples
+                x_list, feature_indices, left_list, right_list, mask_left_list, mask_right_list = zip(*[
+                    (self.x_test[id][:, feature], feature, left, right, mask_left, mask_right) for id, feature, left, right, mask_left, mask_right in pos_examples
                 ])
                 print(f"Class {i + 1}: Correct Predictions")
                 x_list = np.array(x_list)
                 x_list = [sub[sub != self.explainer.model.padding_value] for sub in x_list]
-                self.explainer._plot_features_with_highlights(x_list, feature_indices, left_list, right_list)
+                self.explainer._plot_features_with_highlights(x_list, feature_indices, left_list, right_list, mask_left_list, mask_right_list)
 
             neg_examples = solutions["neg"][i][:scale]
             if neg_examples:
                 print(f"Class {i + 1}: Incorrect Predictions")
-                x_list, feature_indices, left_list, right_list = zip(*[
-                    (self.x_test[id][:, feature], feature, left, right) for id, feature, left, right in neg_examples if feature != -1
+                x_list, feature_indices, left_list, right_list, mask_left_list, mask_right_list = zip(*[
+                    (self.x_test[id][:, feature], feature, left, right, mask_left, mask_right) for id, feature, left, right, mask_left, mask_right in neg_examples if feature != -1
                 ])
                 x_list = np.array(x_list)
                 x_list = [sub[sub != self.explainer.model.padding_value] for sub in x_list]
-                self.explainer._plot_features_with_highlights(x_list, feature_indices, left_list, right_list)
+                self.explainer._plot_features_with_highlights(x_list, feature_indices, left_list, right_list, mask_left_list, mask_right_list)
     
