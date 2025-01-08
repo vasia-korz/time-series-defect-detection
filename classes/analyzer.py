@@ -1,4 +1,6 @@
 import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 class Analyzer:
     def __init__(self, explainer, x_test, y_true, masks):
@@ -143,6 +145,62 @@ class Analyzer:
             print(f"Correct: {correct}, overall: {overall}")
 
         return correct / overall if overall > 0 else 0
+    
+
+    def feature_class_matrix(self, plot=False):
+        matrix = {i: [0 for _ in range(self.explainer.model.n_features)] for i in range(self.explainer.model.n_classes)}
+        matrix_target = {i: [0 for _ in range(self.explainer.model.n_features)] for i in range(self.explainer.model.n_classes)}
+        
+        for i, explanation in enumerate(self.explainer.explanations):
+            for j in range(len(explanation["feature"])):
+                if explanation["pred"][0][j] == 1:
+                    matrix[j][explanation["feature"][j]] += 1
+
+                for mask in (self.masks[i][j] if self.masks[i][j] is not None else [None]):
+                    if mask is not None:
+                        matrix_target[j][mask[0]] += 1
+
+        if plot:
+            self._plot_class_feature_distributions(matrix, matrix_target)
+        
+        return matrix, matrix_target
+    
+
+    def _plot_class_feature_distributions(self, matrix_pred, matrix_true):
+        matrix_pred_array = np.array([matrix_pred[key] for key in sorted(matrix_pred.keys())])
+        matrix_true_array = np.array([matrix_true[key] for key in sorted(matrix_true.keys())])
+        
+        fig, axs = plt.subplots(1, 2, figsize=(11, 5))
+
+        sns.heatmap(
+            matrix_pred_array,
+            annot=True,
+            cmap="Blues",
+            fmt="d",
+            xticklabels=["Feature 1", "Feature 2", "Feature 3"],
+            yticklabels=[f"Class {i+1}" for i in range(len(matrix_pred))],
+            ax=axs[0]
+        )
+        axs[0].set_title("Defect-Class Feature Mapping - Predicted", fontsize=14, pad=20)
+        axs[0].set_xlabel("Features", fontsize=12, labelpad=10)
+        axs[0].set_ylabel("Defect Classes", fontsize=12, labelpad=10)
+
+        sns.heatmap(
+            matrix_true_array,
+            annot=True,
+            cmap="Greens",
+            fmt="d",
+            xticklabels=["Feature 1", "Feature 2", "Feature 3"],
+            yticklabels=[f"Class {i+1}" for i in range(len(matrix_true))],
+            ax=axs[1]
+        )
+        axs[1].set_title("Defect-Class Feature Mapping - Expected", fontsize=14, pad=20)
+        axs[1].set_xlabel("Features", fontsize=12, labelpad=10)
+        axs[1].set_ylabel("Defect Classes", fontsize=12, labelpad=10)
+
+        fig.subplots_adjust(wspace=0.3, top=0.85, bottom=0.15)
+        plt.show()
+
     
 
     def class_based_accuracy(self, debug=False):
